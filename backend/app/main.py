@@ -1,5 +1,6 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -9,8 +10,17 @@ import shutil
 from app.database import Base, engine, SessionLocal
 from models.category import Category
 from models.product import Product
+from models.order import Order
 
 Base.metadata.create_all(bind=engine)
+
+class OrderCreate(BaseModel):
+    product_id: int
+    product_name: str
+    quantity: int
+    customer_name: str
+    mobile: str
+    address: str
 
 app = FastAPI(
     title="DK TEXTILE API",
@@ -260,4 +270,79 @@ def upload_product_video(
         "message": "Product video uploaded and linked successfully",
         "product_id": product.id,
         "video_path": product.video_path
+    }
+
+@app.post("/orders")
+def create_order(
+    order: OrderCreate,
+    db: Session = Depends(get_db)
+):
+    # Find the product
+    product = (
+        db.query(Product)
+        .filter(Product.id == order.product_id)
+        .first()
+    )
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    # Check minimum order quantity
+    if order.quantity < product.minimum_order_quantity:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum order quantity is {product.minimum_order_quantity}"
+        )
+
+    # Check stock
+    if order.quantity > product.stock:
+        raise HTTPException(
+            status_code=400,
+            detail="Not enough stock available"
+        )
+
+    # Calculate total
+    price = (
+        product.wholesale_price
+        if product.wholesale_price is not None
+        else product.price
+    )
+
+    total_price = price * order.quantity
+
+    # Create order
+    new_order = Order(
+        product_id=product.id,
+        product_name=product.name,
+        quantity=order.quantity,
+        customer_name=order.customer_name,
+        mobile=order.mobile,
+        address=order.address,
+        total_price=total_price,
+        status="Pending"
+    )
+
+    db.add(new_order)
+
+    # Reduce product stock
+    product.stock -= order.quantity
+
+    db.commit()
+    db.refresh(new_order)
+
+    return {
+        "message": "Order placed successfully",
+        "order": {
+            "id": new_order.id,
+            "product_name": new_order.product_name,
+            "quantity": new_order.quantity,
+            "customer_name": new_order.customer_name,
+            "mobile": new_order.mobile,
+            "address": new_order.address,
+            "total_price": new_order.total_price,
+            "status": new_order.status
+        }
     }
