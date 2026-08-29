@@ -12,8 +12,12 @@ from models.category import Category
 from models.product import Product
 from models.order import Order
 
+
+# Create database tables
 Base.metadata.create_all(bind=engine)
 
+
+# Order request model
 class OrderCreate(BaseModel):
     product_id: int
     product_name: str
@@ -22,12 +26,16 @@ class OrderCreate(BaseModel):
     mobile: str
     address: str
 
+
+# Create FastAPI application
 app = FastAPI(
     title="DK TEXTILE API",
     description="Backend API for DK TEXTILE",
     version="1.0.0"
 )
 
+
+# CORS settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -39,21 +47,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Static uploads folder
 app.mount(
     "/uploads",
     StaticFiles(directory="uploads"),
     name="uploads"
 )
 
+
 # Database connection
 def get_db():
     db = SessionLocal()
+
     try:
         yield db
+
     finally:
         db.close()
 
 
+# Home API
 @app.get("/")
 def home():
     return {
@@ -61,6 +75,7 @@ def home():
     }
 
 
+# Health check
 @app.get("/health")
 def health_check():
     return {
@@ -68,10 +83,16 @@ def health_check():
     }
 
 
+# =========================
+# CATEGORY APIs
+# =========================
+
 # Get all categories
 @app.get("/categories")
 def get_categories(db: Session = Depends(get_db)):
+
     categories = db.query(Category).all()
+
     return categories
 
 
@@ -82,6 +103,7 @@ def create_category(
     description: str = None,
     db: Session = Depends(get_db)
 ):
+
     existing_category = (
         db.query(Category)
         .filter(Category.name == name)
@@ -89,6 +111,7 @@ def create_category(
     )
 
     if existing_category:
+
         raise HTTPException(
             status_code=400,
             detail="Category already exists"
@@ -100,7 +123,9 @@ def create_category(
     )
 
     db.add(new_category)
+
     db.commit()
+
     db.refresh(new_category)
 
     return {
@@ -111,10 +136,18 @@ def create_category(
             "description": new_category.description
         }
     }
+
+
+# =========================
+# PRODUCT APIs
+# =========================
+
 # Get all products
 @app.get("/products")
 def get_products(db: Session = Depends(get_db)):
+
     products = db.query(Product).all()
+
     return products
 
 
@@ -134,7 +167,8 @@ def create_product(
     status: str = "Active",
     db: Session = Depends(get_db)
 ):
-    # Check whether the category exists
+
+    # Check category
     category = (
         db.query(Category)
         .filter(Category.id == category_id)
@@ -142,12 +176,13 @@ def create_product(
     )
 
     if not category:
+
         raise HTTPException(
             status_code=404,
             detail="Category not found"
         )
 
-    # Check whether the product code already exists
+    # Check product code
     existing_product = (
         db.query(Product)
         .filter(Product.product_code == product_code)
@@ -155,12 +190,13 @@ def create_product(
     )
 
     if existing_product:
+
         raise HTTPException(
             status_code=400,
             detail="Product code already exists"
         )
 
-    # Create the product
+    # Create product
     new_product = Product(
         product_code=product_code,
         name=name,
@@ -176,7 +212,9 @@ def create_product(
     )
 
     db.add(new_product)
+
     db.commit()
+
     db.refresh(new_product)
 
     return {
@@ -184,13 +222,18 @@ def create_product(
         "product": new_product
     }
 
+
+# =========================
+# PRODUCT IMAGE UPLOAD
+# =========================
+
 @app.post("/products/{product_id}/image")
 def upload_product_image(
     product_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    # Check whether the product exists
+
     product = (
         db.query(Product)
         .filter(Product.id == product_id)
@@ -198,28 +241,35 @@ def upload_product_image(
     )
 
     if not product:
+
         raise HTTPException(
             status_code=404,
             detail="Product not found"
         )
 
-    # Create upload folder if it does not exist
     upload_folder = "uploads/products"
-    os.makedirs(upload_folder, exist_ok=True)
 
-    # Create file path
+    os.makedirs(
+        upload_folder,
+        exist_ok=True
+    )
+
     file_path = os.path.join(
         upload_folder,
         f"product_{product_id}_{file.filename}"
     )
 
-    # Save the uploaded image
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
 
-    # Save image path in the database
+        shutil.copyfileobj(
+            file.file,
+            buffer
+        )
+
     product.image_path = file_path
+
     db.commit()
+
     db.refresh(product)
 
     return {
@@ -228,13 +278,18 @@ def upload_product_image(
         "image_path": product.image_path
     }
 
+
+# =========================
+# PRODUCT VIDEO UPLOAD
+# =========================
+
 @app.post("/products/{product_id}/video")
 def upload_product_video(
     product_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    # Check whether the product exists
+
     product = (
         db.query(Product)
         .filter(Product.id == product_id)
@@ -242,28 +297,35 @@ def upload_product_video(
     )
 
     if not product:
+
         raise HTTPException(
             status_code=404,
             detail="Product not found"
         )
 
-    # Create video upload folder if it does not exist
     upload_folder = "uploads/videos"
-    os.makedirs(upload_folder, exist_ok=True)
 
-    # Create video file path
+    os.makedirs(
+        upload_folder,
+        exist_ok=True
+    )
+
     file_path = os.path.join(
         upload_folder,
         f"product_{product_id}_{file.filename}"
     )
 
-    # Save the uploaded video
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
 
-    # Save video path in the database
+        shutil.copyfileobj(
+            file.file,
+            buffer
+        )
+
     product.video_path = file_path
+
     db.commit()
+
     db.refresh(product)
 
     return {
@@ -272,12 +334,36 @@ def upload_product_video(
         "video_path": product.video_path
     }
 
+
+# =========================
+# GET ALL ORDERS
+# =========================
+
+@app.get("/orders")
+def get_orders(
+    db: Session = Depends(get_db)
+):
+
+    orders = (
+        db.query(Order)
+        .order_by(Order.id.desc())
+        .all()
+    )
+
+    return orders
+
+
+# =========================
+# CREATE NEW ORDER
+# =========================
+
 @app.post("/orders")
 def create_order(
     order: OrderCreate,
     db: Session = Depends(get_db)
 ):
-    # Find the product
+
+    # Find product
     product = (
         db.query(Product)
         .filter(Product.id == order.product_id)
@@ -285,6 +371,7 @@ def create_order(
     )
 
     if not product:
+
         raise HTTPException(
             status_code=404,
             detail="Product not found"
@@ -292,28 +379,34 @@ def create_order(
 
     # Check minimum order quantity
     if order.quantity < product.minimum_order_quantity:
+
         raise HTTPException(
             status_code=400,
-            detail=f"Minimum order quantity is {product.minimum_order_quantity}"
+            detail=(
+                f"Minimum order quantity is "
+                f"{product.minimum_order_quantity}"
+            )
         )
 
     # Check stock
     if order.quantity > product.stock:
+
         raise HTTPException(
             status_code=400,
             detail="Not enough stock available"
         )
 
-    # Calculate total
+    # Select price
     price = (
         product.wholesale_price
         if product.wholesale_price is not None
         else product.price
     )
 
+    # Calculate total price
     total_price = price * order.quantity
 
-    # Create order
+    # Create new order
     new_order = Order(
         product_id=product.id,
         product_name=product.name,
@@ -327,10 +420,11 @@ def create_order(
 
     db.add(new_order)
 
-    # Reduce product stock
+    # Reduce stock
     product.stock -= order.quantity
 
     db.commit()
+
     db.refresh(new_order)
 
     return {
