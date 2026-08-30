@@ -352,6 +352,57 @@ def get_orders(
 
     return orders
 
+# =========================
+# UPDATE ORDER STATUS
+# =========================
+
+@app.put("/orders/{order_id}/status")
+def update_order_status(
+    order_id: int,
+    status: str,
+    db: Session = Depends(get_db)
+):
+
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id)
+        .first()
+    )
+
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found"
+        )
+
+    allowed_statuses = [
+        "Pending",
+        "Confirmed",
+        "Processing",
+        "Packed",
+        "Dispatched",
+        "Out for Delivery",
+        "Delivered"
+    ]
+
+    if status not in allowed_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid order status"
+        )
+
+    order.status = status
+
+    db.commit()
+    db.refresh(order)
+
+    return {
+        "message": "Order status updated successfully",
+        "order": {
+            "id": order.id,
+            "status": order.status
+        }
+    }
 
 # =========================
 # CREATE NEW ORDER
