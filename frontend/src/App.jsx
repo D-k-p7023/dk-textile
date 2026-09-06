@@ -1,18 +1,44 @@
 import { useEffect, useState } from "react";
-
 import "./App.css";
 
 const API_URL = "https://dk-textile-backend.onrender.com";
 
 function App() {
+  // =========================
+  // PRODUCTS
+  // =========================
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
-  const [showOrderPopup, setShowOrderPopup] = useState(false);
+  // =========================
+  // AUTHENTICATION
+  // =========================
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem("dk_textile_user");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (error) {
+      console.error("Unable to load saved user:", error);
+      return null;
+    }
+  });
 
-  const [showOrdersPage, setShowOrdersPage] = useState(false);
-  const [orders, setOrders] = useState([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [showAuthPage, setShowAuthPage] = useState(false);
+  const [authMode, setAuthMode] = useState("customer-login");
+
+  const [authForm, setAuthForm] = useState({
+    name: "",
+    mobile: "",
+    password: "",
+  });
+
+  const [authMessage, setAuthMessage] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  // =========================
+  // ORDER POPUP
+  // =========================
+  const [showOrderPopup, setShowOrderPopup] = useState(false);
 
   const [orderForm, setOrderForm] = useState({
     name: "",
@@ -24,8 +50,16 @@ function App() {
   const [orderMessage, setOrderMessage] = useState("");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
+  // =========================
+  // ADMIN ORDERS
+  // =========================
+  const [showOrdersPage, setShowOrdersPage] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
+  // =========================
   // LOAD PRODUCTS
+  // =========================
   useEffect(() => {
     fetch(`${API_URL}/products`)
       .then((response) => response.json())
@@ -37,16 +71,275 @@ function App() {
       });
   }, []);
 
-
+  // =========================
   // GET FILE URL
+  // =========================
   const getFileUrl = (path) => {
     if (!path) return "";
 
     return `${API_URL}/${path.replace(/\\/g, "/")}`;
   };
 
+  // =========================
+  // OPEN CUSTOMER LOGIN
+  // =========================
+  const openCustomerLogin = () => {
+    setShowOrdersPage(false);
+    setSelectedProduct(null);
+    setShowOrderPopup(false);
 
+    setAuthMode("customer-login");
+
+    setAuthForm({
+      name: "",
+      mobile: "",
+      password: "",
+    });
+
+    setAuthMessage("");
+    setShowAuthPage(true);
+  };
+
+  // =========================
+  // OPEN CUSTOMER REGISTER
+  // =========================
+  const openCustomerRegister = () => {
+    setShowOrdersPage(false);
+    setSelectedProduct(null);
+    setShowOrderPopup(false);
+
+    setAuthMode("customer-register");
+
+    setAuthForm({
+      name: "",
+      mobile: "",
+      password: "",
+    });
+
+    setAuthMessage("");
+    setShowAuthPage(true);
+  };
+
+  // =========================
+  // OPEN ADMIN LOGIN
+  // =========================
+  const openAdminLogin = () => {
+    setShowOrdersPage(false);
+    setSelectedProduct(null);
+    setShowOrderPopup(false);
+
+    setAuthMode("admin-login");
+
+    setAuthForm({
+      name: "",
+      mobile: "",
+      password: "",
+    });
+
+    setAuthMessage("");
+    setShowAuthPage(true);
+  };
+
+  // =========================
+  // CLOSE AUTH PAGE
+  // =========================
+  const closeAuthPage = () => {
+    setShowAuthPage(false);
+
+    setAuthForm({
+      name: "",
+      mobile: "",
+      password: "",
+    });
+
+    setAuthMessage("");
+  };
+
+  // =========================
+  // AUTH FORM CHANGE
+  // =========================
+  const handleAuthChange = (e) => {
+    setAuthForm({
+      ...authForm,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  // =========================
+  // CUSTOMER REGISTRATION
+  // =========================
+  const handleCustomerRegister = async () => {
+    if (!authForm.name.trim()) {
+      setAuthMessage("Please enter your name.");
+      return;
+    }
+
+    if (!authForm.mobile.trim()) {
+      setAuthMessage("Please enter your mobile number.");
+      return;
+    }
+
+    if (!authForm.password.trim()) {
+      setAuthMessage("Please enter your password.");
+      return;
+    }
+
+    if (authForm.password.length < 4) {
+      setAuthMessage("Password must be at least 4 characters.");
+      return;
+    }
+
+    setIsAuthLoading(true);
+    setAuthMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: authForm.name,
+          mobile: authForm.mobile,
+          password: authForm.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Registration failed."
+        );
+      }
+
+      setAuthMessage(
+        "✅ Registration successful! You can now login."
+      );
+
+      setAuthForm({
+        name: "",
+        mobile: authForm.mobile,
+        password: "",
+      });
+
+      setTimeout(() => {
+        setAuthMode("customer-login");
+        setAuthMessage("");
+      }, 1500);
+    } catch (error) {
+      console.error("Registration error:", error);
+
+      setAuthMessage(
+        `❌ ${error.message || "Registration failed."}`
+      );
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  // =========================
+  // LOGIN
+  // =========================
+  const handleLogin = async (role) => {
+    if (!authForm.mobile.trim()) {
+      setAuthMessage("Please enter your mobile number.");
+      return;
+    }
+
+    if (!authForm.password.trim()) {
+      setAuthMessage("Please enter your password.");
+      return;
+    }
+
+    setIsAuthLoading(true);
+    setAuthMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mobile: authForm.mobile,
+          password: authForm.password,
+          role: role,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Login failed."
+        );
+      }
+
+      const user = data.user;
+
+      localStorage.setItem(
+        "dk_textile_user",
+        JSON.stringify(user)
+      );
+
+      setCurrentUser(user);
+
+      setAuthMessage("✅ Login successful!");
+
+      setAuthForm({
+        name: "",
+        mobile: "",
+        password: "",
+      });
+
+      setTimeout(() => {
+        setShowAuthPage(false);
+        setAuthMessage("");
+
+        if (role === "admin") {
+          openOrdersPageForAdmin(user);
+        }
+      }, 700);
+    } catch (error) {
+      console.error("Login error:", error);
+
+      setAuthMessage(
+        `❌ ${error.message || "Login failed."}`
+      );
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  // =========================
+  // LOGOUT
+  // =========================
+  const handleLogout = () => {
+    localStorage.removeItem("dk_textile_user");
+
+    setCurrentUser(null);
+    setShowOrdersPage(false);
+    setShowAuthPage(false);
+    setSelectedProduct(null);
+    setShowOrderPopup(false);
+
+    setOrders([]);
+    setAuthMessage("");
+
+    setOrderForm({
+      name: "",
+      mobile: "",
+      address: "",
+      quantity: 1,
+    });
+
+    setOrderMessage("");
+  };
+
+  // =========================
   // LOAD ALL ORDERS
+  // =========================
   const loadOrders = async () => {
     setOrdersLoading(true);
 
@@ -60,67 +353,134 @@ function App() {
       const data = await response.json();
 
       setOrders(data);
-
     } catch (error) {
       console.error("Error loading orders:", error);
 
       alert("Unable to load orders.");
-
     } finally {
       setOrdersLoading(false);
     }
   };
 
-// UPDATE ORDER STATUS
-const updateOrderStatus = async (orderId, newStatus) => {
-  try {
-    const response = await fetch(
-      `${API_URL}/orders/${orderId}/status?status=${encodeURIComponent(newStatus)}`,
-      {
-        method: "PUT",
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.detail || "Failed to update order status");
+  // =========================
+  // OPEN ADMIN ORDERS PAGE
+  // =========================
+  const openOrdersPage = () => {
+    if (!currentUser || currentUser.role !== "admin") {
+      openAdminLogin();
+      return;
     }
 
-    // Update the order in the current page
-    setOrders((currentOrders) =>
-      currentOrders.map((order) =>
-        order.id === orderId
-          ? { ...order, status: newStatus }
-          : order
-      )
-    );
+    openOrdersPageForAdmin(currentUser);
+  };
 
-  } catch (error) {
-    console.error("Status update error:", error);
-    alert("Unable to update order status.");
-  }
-};
+  const openOrdersPageForAdmin = (user) => {
+    if (!user || user.role !== "admin") {
+      return;
+    }
 
-  // OPEN ADMIN ORDERS PAGE
-  const openOrdersPage = () => {
     setSelectedProduct(null);
     setShowOrderPopup(false);
+    setShowAuthPage(false);
 
     setShowOrdersPage(true);
 
     loadOrders();
   };
 
-
+  // =========================
   // CLOSE ADMIN ORDERS PAGE
+  // =========================
   const closeOrdersPage = () => {
     setShowOrdersPage(false);
   };
 
+  // =========================
+  // UPDATE ORDER STATUS
+  // =========================
+  const updateOrderStatus = async (orderId, newStatus) => {
+    if (!currentUser || currentUser.role !== "admin") {
+      alert("Only admin can update order status.");
+      return;
+    }
 
+    try {
+      const response = await fetch(
+        `${API_URL}/orders/${orderId}/status?status=${encodeURIComponent(
+          newStatus
+        )}`,
+        {
+          method: "PUT",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Failed to update order status"
+        );
+      }
+
+      setOrders((currentOrders) =>
+        currentOrders.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                status: data.order.status,
+              }
+            : order
+        )
+      );
+
+      console.log(
+        "Order status updated:",
+        data.order.status
+      );
+    } catch (error) {
+      console.error("Status update error:", error);
+
+      alert(
+        error.message ||
+          "Unable to update order status."
+      );
+
+      loadOrders();
+    }
+  };
+
+  // =========================
+  // OPEN ORDER POPUP
+  // =========================
+  const openOrderPopup = () => {
+    if (!currentUser || currentUser.role !== "customer") {
+      openCustomerLogin();
+      return;
+    }
+
+    setShowOrderPopup(true);
+
+    setOrderForm({
+      name: currentUser.name || "",
+      mobile: currentUser.mobile || "",
+      address: "",
+      quantity:
+        selectedProduct.minimum_order_quantity,
+    });
+
+    setOrderMessage("");
+  };
+
+  // =========================
   // PLACE ORDER
+  // =========================
   const handlePlaceOrder = async () => {
+    if (!currentUser || currentUser.role !== "customer") {
+      setOrderMessage(
+        "Please login as a customer before placing an order."
+      );
+      return;
+    }
 
     if (!orderForm.name.trim()) {
       setOrderMessage("Please enter your name.");
@@ -148,17 +508,26 @@ const updateOrderStatus = async (orderId, newStatus) => {
       return;
     }
 
+    if (
+      Number(orderForm.quantity) >
+      Number(selectedProduct.stock)
+    ) {
+      setOrderMessage(
+        "❌ Not enough stock available."
+      );
+
+      return;
+    }
+
     setIsPlacingOrder(true);
     setOrderMessage("");
 
     try {
       const response = await fetch(`${API_URL}/orders`, {
         method: "POST",
-
         headers: {
           "Content-Type": "application/json",
         },
-
         body: JSON.stringify({
           product_id: selectedProduct.id,
           product_name: selectedProduct.name,
@@ -177,52 +546,358 @@ const updateOrderStatus = async (orderId, newStatus) => {
         );
       }
 
-      setOrderMessage("✅ Order placed successfully!");
+      setOrderMessage(
+        "✅ Order placed successfully!"
+      );
 
       setOrderForm({
-        name: "",
-        mobile: "",
+        name: currentUser.name || "",
+        mobile: currentUser.mobile || "",
         address: "",
-        quantity: selectedProduct.minimum_order_quantity,
+        quantity:
+          selectedProduct.minimum_order_quantity,
       });
 
+      // Update displayed stock
+      setSelectedProduct((currentProduct) => ({
+        ...currentProduct,
+        stock:
+          currentProduct.stock -
+          Number(orderForm.quantity),
+      }));
+
+      setProducts((currentProducts) =>
+        currentProducts.map((product) =>
+          product.id === selectedProduct.id
+            ? {
+                ...product,
+                stock:
+                  product.stock -
+                  Number(orderForm.quantity),
+              }
+            : product
+        )
+      );
     } catch (error) {
       console.error("Order error:", error);
 
       setOrderMessage(
-        "❌ Unable to place order. Please try again."
+        `❌ ${
+          error.message ||
+          "Unable to place order. Please try again."
+        }`
       );
-
     } finally {
       setIsPlacingOrder(false);
     }
   };
 
-
   // =========================
-  // ADMIN ORDERS PAGE
+  // AUTH PAGE
   // =========================
+  if (showAuthPage) {
+    const isCustomerRegister =
+      authMode === "customer-register";
 
-  if (showOrdersPage) {
+    const isCustomerLogin =
+      authMode === "customer-login";
+
+    const isAdminLogin =
+      authMode === "admin-login";
+
     return (
       <div className="app">
-
         <nav className="navbar">
           <h1 className="logo">DK TEXTILE</h1>
 
           <button
             className="login-btn"
-            onClick={closeOrdersPage}
+            onClick={closeAuthPage}
           >
             Back to Website
           </button>
         </nav>
 
+        <section className="auth-page">
+          <div className="auth-container">
+            {/* CUSTOMER LOGIN */}
+            {isCustomerLogin && (
+              <>
+                <h2>Customer Login</h2>
+
+                <p className="auth-subtitle">
+                  Login to place your textile orders.
+                </p>
+
+                <label>Mobile Number</label>
+
+                <input
+                  type="tel"
+                  name="mobile"
+                  placeholder="Enter mobile number"
+                  value={authForm.mobile}
+                  onChange={handleAuthChange}
+                />
+
+                <label>Password</label>
+
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="Enter password"
+                  value={authForm.password}
+                  onChange={handleAuthChange}
+                />
+
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() =>
+                    handleLogin("customer")
+                  }
+                  disabled={isAuthLoading}
+                >
+                  {isAuthLoading
+                    ? "Logging in..."
+                    : "Customer Login"}
+                </button>
+
+                {authMessage && (
+                  <p className="auth-message">
+                    {authMessage}
+                  </p>
+                )}
+
+                <p className="auth-switch">
+                  Don't have an account?
+                </p>
+
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={openCustomerRegister}
+                >
+                  Create Customer Account
+                </button>
+
+                <button
+                  type="button"
+                  className="text-btn"
+                  onClick={openAdminLogin}
+                >
+                  Admin Login
+                </button>
+              </>
+            )}
+
+            {/* CUSTOMER REGISTRATION */}
+            {isCustomerRegister && (
+              <>
+                <h2>Customer Registration</h2>
+
+                <p className="auth-subtitle">
+                  Create your DK TEXTILE customer account.
+                </p>
+
+                <label>Full Name</label>
+
+                <input
+                  type="text"
+                  name="name"
+                  placeholder="Enter your name"
+                  value={authForm.name}
+                  onChange={handleAuthChange}
+                />
+
+                <label>Mobile Number</label>
+
+                <input
+                  type="tel"
+                  name="mobile"
+                  placeholder="Enter mobile number"
+                  value={authForm.mobile}
+                  onChange={handleAuthChange}
+                />
+
+                <label>Password</label>
+
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="Create password"
+                  value={authForm.password}
+                  onChange={handleAuthChange}
+                />
+
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={handleCustomerRegister}
+                  disabled={isAuthLoading}
+                >
+                  {isAuthLoading
+                    ? "Creating Account..."
+                    : "Create Account"}
+                </button>
+
+                {authMessage && (
+                  <p className="auth-message">
+                    {authMessage}
+                  </p>
+                )}
+
+                <p className="auth-switch">
+                  Already have an account?
+                </p>
+
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={openCustomerLogin}
+                >
+                  Customer Login
+                </button>
+
+                <button
+                  type="button"
+                  className="text-btn"
+                  onClick={openAdminLogin}
+                >
+                  Admin Login
+                </button>
+              </>
+            )}
+
+            {/* ADMIN LOGIN */}
+            {isAdminLogin && (
+              <>
+                <h2>Admin Login</h2>
+
+                <p className="auth-subtitle">
+                  Admin access for DK TEXTILE management.
+                </p>
+
+                <label>Mobile Number</label>
+
+                <input
+                  type="tel"
+                  name="mobile"
+                  placeholder="Enter admin mobile number"
+                  value={authForm.mobile}
+                  onChange={handleAuthChange}
+                />
+
+                <label>Password</label>
+
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="Enter admin password"
+                  value={authForm.password}
+                  onChange={handleAuthChange}
+                />
+
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() => handleLogin("admin")}
+                  disabled={isAuthLoading}
+                >
+                  {isAuthLoading
+                    ? "Logging in..."
+                    : "Admin Login"}
+                </button>
+
+                {authMessage && (
+                  <p className="auth-message">
+                    {authMessage}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  className="text-btn"
+                  onClick={openCustomerLogin}
+                >
+                  Customer Login
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // =========================
+  // ADMIN ORDERS PAGE
+  // =========================
+  if (showOrdersPage) {
+    if (!currentUser || currentUser.role !== "admin") {
+      return (
+        <div className="app">
+          <nav className="navbar">
+            <h1 className="logo">DK TEXTILE</h1>
+
+            <button
+              className="login-btn"
+              onClick={openAdminLogin}
+            >
+              Admin Login
+            </button>
+          </nav>
+
+          <section className="auth-page">
+            <div className="auth-container">
+              <h2>Admin Access Required</h2>
+
+              <p>
+                Please login with an admin account to
+                view customer orders.
+              </p>
+
+              <button
+                className="primary-btn"
+                onClick={openAdminLogin}
+              >
+                Admin Login
+              </button>
+            </div>
+          </section>
+        </div>
+      );
+    }
+
+    return (
+      <div className="app">
+        <nav className="navbar">
+          <h1 className="logo">DK TEXTILE</h1>
+
+          <div className="nav-links">
+            <span>
+              Welcome, {currentUser.name}
+            </span>
+          </div>
+
+          <div className="auth-buttons">
+            <button
+              className="login-btn"
+              onClick={closeOrdersPage}
+            >
+              Back to Website
+            </button>
+
+            <button
+              className="login-btn logout-btn"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+          </div>
+        </nav>
 
         <section className="orders-page">
-
           <div className="orders-header">
-
             <div>
               <h2>Customer Orders</h2>
 
@@ -231,35 +906,25 @@ const updateOrderStatus = async (orderId, newStatus) => {
               </p>
             </div>
 
-
             <button
               className="primary-btn"
               onClick={loadOrders}
             >
               Refresh Orders
             </button>
-
           </div>
 
-
           {ordersLoading ? (
-
             <p className="loading-text">
               Loading orders...
             </p>
-
           ) : orders.length === 0 ? (
-
             <p className="loading-text">
               No orders available.
             </p>
-
           ) : (
-
             <div className="orders-table-container">
-
               <table className="orders-table">
-
                 <thead>
                   <tr>
                     <th>Order ID</th>
@@ -273,16 +938,10 @@ const updateOrderStatus = async (orderId, newStatus) => {
                   </tr>
                 </thead>
 
-
                 <tbody>
-
                   {orders.map((order) => (
-
                     <tr key={order.id}>
-
-                      <td>
-                        #{order.id}
-                      </td>
+                      <td>#{order.id}</td>
 
                       <td>
                         {order.product_name}
@@ -309,221 +968,225 @@ const updateOrderStatus = async (orderId, newStatus) => {
                       </td>
 
                       <td>
-  <select
-   className={`order-status-select status-${order.status
-  .toLowerCase()
-  .replace(/\s+/g, "-")}`}
-    value={order.status}
-    onChange={(e) =>
-      updateOrderStatus(order.id, e.target.value)
-    }
-  >
-    <option value="Pending">Pending</option>
-    <option value="Confirmed">Confirmed</option>
-    <option value="Processing">Processing</option>
-    <option value="Packed">Packed</option>
-    <option value="Dispatched">Dispatched</option>
-    <option value="Out for Delivery">Out for Delivery</option>
-    <option value="Delivered">Delivered</option>
-  </select>
-</td>
+                        <select
+                          className="order-status-select"
+                          value={
+                            order.status ||
+                            "Pending"
+                          }
+                          onChange={(e) =>
+                            updateOrderStatus(
+                              order.id,
+                              e.target.value
+                            )
+                          }
+                        >
+                          <option value="Pending">
+                            Pending
+                          </option>
 
+                          <option value="Confirmed">
+                            Confirmed
+                          </option>
+
+                          <option value="Processing">
+                            Processing
+                          </option>
+
+                          <option value="Packed">
+                            Packed
+                          </option>
+
+                          <option value="Dispatched">
+                            Dispatched
+                          </option>
+
+                          <option value="Out for Delivery">
+                            Out for Delivery
+                          </option>
+
+                          <option value="Delivered">
+                            Delivered
+                          </option>
+                        </select>
+                      </td>
                     </tr>
-
                   ))}
-
                 </tbody>
-
               </table>
-
             </div>
-
           )}
-
         </section>
-
       </div>
     );
   }
 
-
   // =========================
   // PRODUCT DETAILS PAGE
   // =========================
-
   if (selectedProduct) {
     return (
       <div className="app">
-
         <nav className="navbar">
+          <h1 className="logo">DK TEXTILE</h1>
 
-          <h1 className="logo">
-            DK TEXTILE
-          </h1>
+          <div className="auth-buttons">
+            {currentUser ? (
+              <>
+                <span className="user-welcome">
+                  Hi, {currentUser.name}
+                </span>
 
+                {currentUser.role === "admin" && (
+                  <button
+                    className="login-btn"
+                    onClick={openOrdersPage}
+                  >
+                    Admin Orders
+                  </button>
+                )}
 
-          <button
-            className="login-btn"
-            onClick={openOrdersPage}
-          >
-            Admin Orders
-          </button>
+                <button
+                  className="login-btn logout-btn"
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="login-btn"
+                  onClick={openCustomerLogin}
+                >
+                  Customer Login
+                </button>
 
+                <button
+                  className="login-btn"
+                  onClick={openAdminLogin}
+                >
+                  Admin Login
+                </button>
+              </>
+            )}
+          </div>
         </nav>
 
-
         <section className="product-details-page">
-
           <button
             className="back-btn"
             onClick={() => {
               setSelectedProduct(null);
               setShowOrderPopup(false);
+              setOrderMessage("");
             }}
           >
             ← Back to Products
           </button>
 
-
           <div className="product-details-container">
-
             <div className="product-details-media">
-
               {selectedProduct.image_path ? (
-
                 <img
-                  src={getFileUrl(selectedProduct.image_path)}
+                  src={getFileUrl(
+                    selectedProduct.image_path
+                  )}
                   alt={selectedProduct.name}
                   className="details-image"
                 />
-
               ) : (
-
                 <div className="no-image">
                   No Image Available
                 </div>
-
               )}
 
-
               {selectedProduct.video_path && (
-
                 <video
                   controls
                   className="details-video"
                 >
-
                   <source
-                    src={getFileUrl(selectedProduct.video_path)}
+                    src={getFileUrl(
+                      selectedProduct.video_path
+                    )}
                     type="video/mp4"
                   />
 
-                  Your browser does not support the video tag.
-
+                  Your browser does not support the
+                  video tag.
                 </video>
-
               )}
-
             </div>
 
-
             <div className="product-details-info">
-
-              <h2>
-                {selectedProduct.name}
-              </h2>
-
+              <h2>{selectedProduct.name}</h2>
 
               <p>
                 <strong>Product Code:</strong>{" "}
                 {selectedProduct.product_code}
               </p>
 
-
               <p>
                 <strong>Fabric:</strong>{" "}
                 {selectedProduct.fabric}
               </p>
-
 
               <p>
                 <strong>Color:</strong>{" "}
                 {selectedProduct.color}
               </p>
 
-
               <p>
                 <strong>Retail Price:</strong> ₹{" "}
                 {selectedProduct.price}
               </p>
-
 
               <p>
                 <strong>Wholesale Price:</strong> ₹{" "}
                 {selectedProduct.wholesale_price}
               </p>
 
-
               <p>
                 <strong>Available Stock:</strong>{" "}
                 {selectedProduct.stock}
               </p>
-
 
               <p>
                 <strong>Minimum Order Quantity:</strong>{" "}
                 {selectedProduct.minimum_order_quantity}
               </p>
 
-
               <p>
                 <strong>Status:</strong>{" "}
                 {selectedProduct.status}
               </p>
 
-
               <p className="details-description">
-
                 <strong>Description:</strong>
-
                 <br />
-
                 {selectedProduct.description}
-
               </p>
-
 
               <button
                 type="button"
                 className="primary-btn"
-                onClick={() => {
-                  setShowOrderPopup(true);
-
-                  setOrderForm({
-                    ...orderForm,
-                    quantity:
-                      selectedProduct.minimum_order_quantity,
-                  });
-
-                  setOrderMessage("");
-                }}
+                onClick={openOrderPopup}
+                disabled={
+                  Number(selectedProduct.stock) <= 0
+                }
               >
-                Order Now
+                {Number(selectedProduct.stock) <= 0
+                  ? "Out of Stock"
+                  : "Order Now"}
               </button>
-
             </div>
-
           </div>
 
-
           {/* ORDER POPUP */}
-
           {showOrderPopup && (
-
             <div className="order-popup-overlay">
-
               <div className="order-popup">
-
                 <button
                   type="button"
                   className="popup-close"
@@ -535,38 +1198,35 @@ const updateOrderStatus = async (orderId, newStatus) => {
                   ×
                 </button>
 
-
-                <h2>
-                  Place Your Order
-                </h2>
-
+                <h2>Place Your Order</h2>
 
                 <h3>
                   {selectedProduct.name}
                 </h3>
-
 
                 <p>
                   <strong>Product Code:</strong>{" "}
                   {selectedProduct.product_code}
                 </p>
 
-
                 <p>
-                  <strong>Wholesale Price:</strong> ₹{" "}
-                  {selectedProduct.wholesale_price}
+                  <strong>Wholesale Price:</strong>{" "}
+                  ₹ {selectedProduct.wholesale_price}
                 </p>
 
+                <p>
+                  <strong>Available Stock:</strong>{" "}
+                  {selectedProduct.stock}
+                </p>
 
-                <label>
-                  Quantity
-                </label>
+                <label>Quantity</label>
 
                 <input
                   type="number"
                   min={
                     selectedProduct.minimum_order_quantity
                   }
+                  max={selectedProduct.stock}
                   value={orderForm.quantity}
                   onChange={(e) =>
                     setOrderForm({
@@ -576,10 +1236,7 @@ const updateOrderStatus = async (orderId, newStatus) => {
                   }
                 />
 
-
-                <label>
-                  Your Name
-                </label>
+                <label>Your Name</label>
 
                 <input
                   type="text"
@@ -593,10 +1250,7 @@ const updateOrderStatus = async (orderId, newStatus) => {
                   }
                 />
 
-
-                <label>
-                  Mobile Number
-                </label>
+                <label>Mobile Number</label>
 
                 <input
                   type="tel"
@@ -610,10 +1264,7 @@ const updateOrderStatus = async (orderId, newStatus) => {
                   }
                 />
 
-
-                <label>
-                  Delivery Address
-                </label>
+                <label>Delivery Address</label>
 
                 <textarea
                   placeholder="Enter delivery address"
@@ -627,108 +1278,107 @@ const updateOrderStatus = async (orderId, newStatus) => {
                   }
                 ></textarea>
 
-
                 <button
                   type="button"
                   className="primary-btn"
                   onClick={handlePlaceOrder}
                   disabled={isPlacingOrder}
                 >
-
                   {isPlacingOrder
                     ? "Placing Order..."
                     : "Place Order"}
-
                 </button>
 
-
                 {orderMessage && (
-
                   <p className="order-message">
                     {orderMessage}
                   </p>
-
                 )}
-
               </div>
-
             </div>
-
           )}
-
         </section>
-
       </div>
     );
   }
 
-
   // =========================
   // HOME PAGE
   // =========================
-
   return (
     <div className="app">
-
-      {/* NAVBAR */}
-
+      {/* NAVIGATION BAR */}
       <nav className="navbar">
-
-        <h1 className="logo">
-          DK TEXTILE
-        </h1>
-
+        <h1 className="logo">DK TEXTILE</h1>
 
         <div className="nav-links">
+          <a href="#home">Home</a>
 
-          <a href="#home">
-            Home
-          </a>
+          <a href="#products">Products</a>
 
-          <a href="#products">
-            Products
-          </a>
+          <a href="#about">About Us</a>
 
-          <a href="#about">
-            About Us
-          </a>
-
-          <a href="#contact">
-            Contact
-          </a>
-
+          <a href="#contact">Contact</a>
         </div>
 
+        <div className="auth-buttons">
+          {currentUser ? (
+            <>
+              <span className="user-welcome">
+                Hi, {currentUser.name}
+              </span>
 
-        <button
-          className="login-btn"
-          onClick={openOrdersPage}
-        >
-          Admin Orders
-        </button>
+              {currentUser.role === "admin" && (
+                <button
+                  className="login-btn"
+                  onClick={openOrdersPage}
+                >
+                  Admin Orders
+                </button>
+              )}
 
+              <button
+                className="login-btn logout-btn"
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="login-btn"
+                onClick={openCustomerLogin}
+              >
+                Customer Login
+              </button>
+
+              <button
+                className="login-btn"
+                onClick={openAdminLogin}
+              >
+                Admin Login
+              </button>
+            </>
+          )}
+        </div>
       </nav>
 
-
       {/* HERO */}
-
       <section
         className="hero"
         id="home"
       >
-
         <div className="hero-content">
-
           <h2>
             Premium Textile Products for Every Business
           </h2>
 
-
           <p>
-            DK TEXTILE provides quality fabrics and textile
-            products for shopkeepers and customers across India.
+            DK TEXTILE provides quality fabrics and
+            textile products for shopkeepers and
+            customers across India.
           </p>
-
 
           <button
             className="primary-btn"
@@ -742,43 +1392,26 @@ const updateOrderStatus = async (orderId, newStatus) => {
           >
             Explore Products
           </button>
-
         </div>
-
       </section>
 
-
       {/* PRODUCTS */}
-
       <section
         className="products-section"
         id="products"
       >
-
-        <h2>
-          Our Products
-        </h2>
-
+        <h2>Our Products</h2>
 
         <div className="product-container">
-
           {products.length === 0 ? (
-
-            <p>
-              Loading products...
-            </p>
-
+            <p>Loading products...</p>
           ) : (
-
             products.map((product) => (
-
               <div
                 className="product-card"
                 key={product.id}
               >
-
                 {product.image_path ? (
-
                   <img
                     src={getFileUrl(
                       product.image_path
@@ -786,50 +1419,36 @@ const updateOrderStatus = async (orderId, newStatus) => {
                     alt={product.name}
                     className="product-image"
                   />
-
                 ) : (
-
                   <div className="no-image">
                     No Image Available
                   </div>
-
                 )}
 
-
-                <h3>
-                  {product.name}
-                </h3>
-
+                <h3>{product.name}</h3>
 
                 <p>
                   <strong>Fabric:</strong>{" "}
                   {product.fabric}
                 </p>
 
-
                 <p>
                   <strong>Color:</strong>{" "}
                   {product.color}
                 </p>
 
-
                 <p className="price">
                   ₹ {product.price}
                 </p>
 
+                <p>{product.description}</p>
 
-                <p>
-                  {product.description}
-                </p>
-
-
+                {/* PRODUCT VIDEO */}
                 {product.video_path && (
-
                   <video
                     controls
                     className="product-video"
                   >
-
                     <source
                       src={getFileUrl(
                         product.video_path
@@ -837,13 +1456,10 @@ const updateOrderStatus = async (orderId, newStatus) => {
                       type="video/mp4"
                     />
 
-                    Your browser does not support
-                    the video tag.
-
+                    Your browser does not support the
+                    video tag.
                   </video>
-
                 )}
-
 
                 <button
                   className="primary-btn"
@@ -853,29 +1469,18 @@ const updateOrderStatus = async (orderId, newStatus) => {
                 >
                   View Details
                 </button>
-
               </div>
-
             ))
-
           )}
-
         </div>
-
       </section>
 
-
       {/* ABOUT */}
-
       <section
         className="about-section"
         id="about"
       >
-
-        <h2>
-          About DK TEXTILE
-        </h2>
-
+        <h2>About DK TEXTILE</h2>
 
         <p>
           DK TEXTILE is a textile manufacturing and
@@ -885,34 +1490,24 @@ const updateOrderStatus = async (orderId, newStatus) => {
           production, wholesale supply, and product
           ordering services.
         </p>
-
       </section>
 
-
       {/* FOOTER */}
-
       <footer
         className="footer"
         id="contact"
       >
-
-        <h2>
-          DK TEXTILE
-        </h2>
-
+        <h2>DK TEXTILE</h2>
 
         <p>
           Quality Textile Products • Wholesale Orders •
           Delivery Across India
         </p>
 
-
         <p>
           © 2026 DK TEXTILE. All Rights Reserved.
         </p>
-
       </footer>
-
     </div>
   );
 }

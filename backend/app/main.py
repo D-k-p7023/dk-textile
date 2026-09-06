@@ -11,7 +11,15 @@ from app.database import Base, engine, SessionLocal
 from models.category import Category
 from models.product import Product
 from models.order import Order
+from models.user import User
 
+import hashlib
+import secrets
+import base64
+import hmac
+import time
+import os
+import shutil
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -25,6 +33,17 @@ class OrderCreate(BaseModel):
     customer_name: str
     mobile: str
     address: str
+
+class CustomerRegister(BaseModel):
+    name: str
+    mobile: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    mobile: str
+    password: str
+    role: str
 
 
 # Create FastAPI application
@@ -66,6 +85,48 @@ def get_db():
     finally:
         db.close()
 
+# =========================
+# PASSWORD SECURITY
+# =========================
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        100000
+    )
+
+    return (
+        base64.b64encode(salt).decode("utf-8")
+        + ":"
+        + base64.b64encode(password_hash).decode("utf-8")
+    )
+
+
+def verify_password(password: str, stored_password: str) -> bool:
+    try:
+        salt_b64, hash_b64 = stored_password.split(":")
+
+        salt = base64.b64decode(salt_b64)
+        stored_hash = base64.b64decode(hash_b64)
+
+        password_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            100000
+        )
+
+        return hmac.compare_digest(
+            password_hash,
+            stored_hash
+        )
+
+    except Exception:
+        return False
 
 # Home API
 @app.get("/")
@@ -82,6 +143,140 @@ def health_check():
         "status": "Backend is working successfully"
     }
 
+# =========================
+# CUSTOMER REGISTRATION
+# =========================
+
+@app.post("/auth/register")
+def register_customer(
+    user: CustomerRegister,
+    db: Session = Depends(get_db)
+):
+
+    existing_user = (
+        db.query(User)
+        .filter(User.mobile == user.mobile)
+        .first()
+    )
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Mobile number is already registered"
+        )
+
+    new_user = User(
+        name=user.name,
+        mobile=user.mobile,
+        password=hash_password(user.password),
+        role="customer"
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {
+        "message": "Customer registered successfully",
+        "user": {
+            "id": new_user.id,
+            "name": new_user.name,
+            "mobile": new_user.mobile,
+            "role": new_user.role
+        }
+    }
+
+# =========================
+# LOGIN
+# =========================
+
+@app.post("/auth/login")
+def login(
+    login_data: LoginRequest,
+    db: Session = Depends(get_db)
+):
+
+    user = (
+        db.query(User)
+        .filter(User.mobile == login_data.mobile)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid mobile number or password"
+        )
+
+    if not verify_password(
+        login_data.password,
+        user.password
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid mobile number or password"
+        )
+
+    if user.role != login_data.role:
+        raise HTTPException(
+            status_code=403,
+            detail=f"This account is not a {login_data.role} account"
+        )
+
+    return {
+        "message": "Login successful",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "mobile": user.mobile,
+            "role": user.role
+        }
+    }
+
+# =========================
+# CREATE ADMIN
+# =========================
+
+@app.post("/auth/create-admin")
+def create_admin(
+    name: str,
+    mobile: str,
+    password: str,
+    db: Session = Depends(get_db)
+):
+
+    existing_admin = (
+        db.query(User)
+        .filter(User.mobile == mobile)
+        .first()
+    )
+
+    if existing_admin:
+        raise HTTPException(
+            status_code=400,
+            detail="An account with this mobile number already exists"
+        )
+
+    admin = User(
+        name=name,
+        mobile=mobile,
+        password=hash_password(password),
+        role="admin"
+    )
+
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+
+    return {
+        "message": "Admin account created successfully",
+        "admin": {
+            "id": admin.id,
+            "name": admin.name,
+            "mobile": admin.mobile,
+            "role": admin.role
+        }
+    }
 
 # =========================
 # CATEGORY APIs
