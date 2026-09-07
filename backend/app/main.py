@@ -45,6 +45,18 @@ class LoginRequest(BaseModel):
     password: str
     role: str
 
+class ProductUpdate(BaseModel):
+    product_code: str = None
+    name: str = None
+    category_id: int = None
+    fabric: str = None
+    color: str = None
+    price: float = None
+    wholesale_price: float = None
+    stock: int = None
+    minimum_order_quantity: int = None
+    description: str = None
+    status: str = None
 
 # Create FastAPI application
 app = FastAPI(
@@ -415,6 +427,108 @@ def create_product(
     return {
         "message": "Product created successfully",
         "product": new_product
+    }
+
+# =========================
+# UPDATE PRODUCT
+# =========================
+
+@app.put("/products/{product_id}")
+def update_product(
+    product_id: int,
+    product: ProductUpdate,
+    db: Session = Depends(get_db)
+):
+
+    # Find product
+    existing_product = (
+        db.query(Product)
+        .filter(Product.id == product_id)
+        .first()
+    )
+
+    if not existing_product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    # Check category if category_id is being changed
+    if product.category_id is not None:
+        category = (
+            db.query(Category)
+            .filter(Category.id == product.category_id)
+            .first()
+        )
+
+        if not category:
+            raise HTTPException(
+                status_code=404,
+                detail="Category not found"
+            )
+
+    # Check product code if it is being changed
+    if product.product_code is not None:
+        duplicate_product = (
+            db.query(Product)
+            .filter(
+                Product.product_code == product.product_code,
+                Product.id != product_id
+            )
+            .first()
+        )
+
+        if duplicate_product:
+            raise HTTPException(
+                status_code=400,
+                detail="Product code already exists"
+            )
+
+    # Update only fields that were provided
+    update_data = product.dict(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(existing_product, field, value)
+
+    db.commit()
+    db.refresh(existing_product)
+
+    return {
+        "message": "Product updated successfully",
+        "product": existing_product
+    }
+
+
+# =========================
+# DELETE PRODUCT
+# =========================
+
+@app.delete("/products/{product_id}")
+def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+
+    # Find product
+    product = (
+        db.query(Product)
+        .filter(Product.id == product_id)
+        .first()
+    )
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    # Delete product from database
+    db.delete(product)
+    db.commit()
+
+    return {
+        "message": "Product deleted successfully",
+        "product_id": product_id
     }
 
 
