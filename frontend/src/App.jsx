@@ -320,16 +320,25 @@ function App() {
     loadProducts();
   }, []);
 
-  // =========================
-  // GET FILE URL
-  // =========================
-  const getFileUrl = (path) => {
-    if (!path) {
-      return "";
-    }
+ // =========================
+// GET FILE URL
+// =========================
+const getFileUrl = (path) => {
+  if (!path) {
+    return "";
+  }
 
-    return `${API_URL}/${path.replace(/\\/g, "/")}`;
-  };
+  // Cloudinary / external URL
+  if (
+    path.startsWith("http://") ||
+    path.startsWith("https://")
+  ) {
+    return path;
+  }
+
+  // Old/local backend file path
+  return `${API_URL}/${path.replace(/\\/g, "/")}`;
+};
 
   // =========================
   // PUBLIC PRODUCT CATALOGUE FILTERS
@@ -4888,8 +4897,19 @@ function App() {
                         alt={product.name}
                         className="catalogue-image"
                         onError={(e) => {
+                          console.error(
+                            "DK TEXTILE IMAGE ERROR:",
+                            product.product_code,
+                            getFileUrl(product.image_path)
+                          );
                           e.currentTarget.style.display = "none";
-                          e.currentTarget.nextElementSibling.style.display = "flex";
+                          const placeholder =
+                            e.currentTarget.parentElement.querySelector(
+                              ".catalogue-image-placeholder"
+                            );
+                          if (placeholder) {
+                            placeholder.style.display = "flex";
+                          }
                         }}
                       />
                     ) : null}
@@ -4898,7 +4918,7 @@ function App() {
                       style={{ display: product.image_path ? "none" : "flex" }}
                     >
                       <span>DK</span>
-                      <small>IMAGE COMING SOON</small>
+                      <small>{product.image_path ? "IMAGE LOADING..." : "IMAGE COMING SOON"}</small>
                     </div>
 
                     <span className="catalogue-code-badge">{product.product_code || `DK${String(product.id).padStart(3, "0")}`}</span>
